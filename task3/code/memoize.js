@@ -1,77 +1,54 @@
 function memoize(fn, options = {}) {
     const cache = new Map();
+    const { maxSize = Infinity, ttl = 0, eviction = 'LRU', customEvict } = options;
 
-    const maxSize = options.maxSize || Infinity;
-    const ttl = options.ttl || 0;
-    const customEvict = options.customEvict;
-
-    function evictLRU() {
-        const oldestKey = cache.keys().next().value;
-        cache.delete(oldestKey);
-    }
-
-    function evictLFU() {
-        let leastKey;
-        let leastCount = Infinity;
-
-        for (const [key, entry] of cache.entries()) {
-            if (entry.count < leastCount) {
-                leastCount = entry.count;
-                leastKey = key;
-            }
-        }
-
-        cache.delete(leastKey);
-    }
-
-    function evict() {
+    const evict = () => {
         if (cache.size <= maxSize) return;
 
-        if (options.eviction === "LFU") {
-            evictLFU();
-        } else {
-            evictLRU();
+        if (eviction === 'custom' && typeof customEvict === 'function') {
+            cache.delete(customEvict(cache));
+            return;
         }
-    }
+
+        if (eviction === 'LFU') {
+            let minKey;
+            let minFreq = Infinity;
+            for (const [key, val] of cache.entries()) {
+                if (val.freq < minFreq) {
+                    minFreq = val.freq;
+                    minKey = key;
+                }
+            }
+            cache.delete(minKey);
+            return;
+        }
+
+        cache.delete(cache.keys().next().value);
+    };
 
     return function (...args) {
         const key = JSON.stringify(args);
+        const now = Date.now();
 
         if (cache.has(key)) {
-            const entry = cache.get(key);
-
-            // TTL check
-            if (ttl > 0 && Date.now() - entry.timestamp >= ttl) {
+            const item = cache.get(key);
+            
+            if (ttl > 0 && now > item.expiry) {
                 cache.delete(key);
             } else {
-                cache.delete(key);
-                cache.set(key, entry);
-
-                entry.timestamp = Date.now();
-                entry.count += 1;
-
-                return entry.value;
+                item.freq++;
+                if (eviction === 'LRU') {
+                    cache.delete(key);
+                    cache.set(key, item);
+                }
+                return item.value;
             }
         }
 
         const result = fn(...args);
-
-        cache.set(key, {
-            value: result,
-            timestamp: Date.now(),
-            count: 1
-        });
-
+        cache.set(key, { value: result, freq: 1, expiry: now + ttl });
         evict();
-
-        if (
-            options.eviction === "custom" &&
-            typeof customEvict === "function"
-        ) {
-            const keyToRemove = customEvict(cache);
-            cache.delete(keyToRemove);
-        }
-
+        
         return result;
     };
 }
