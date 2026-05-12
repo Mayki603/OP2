@@ -20,3 +20,22 @@ async function processLargeData(stream) {
     
     console.log('Finished. Total items processed:', processedCount, '| Final sum:', sum);
 }
+
+async function processLargeData(stream) {
+    let processedCount = 0;
+    let sum = 0;
+
+    try {
+        for await (let chunk of stream) {
+            sum += chunk;
+            processedCount++;
+            
+            if (processedCount % 5 === 0) {
+                console.log('Processed items:', processedCount, '| Current sum:', sum);
+            }
+        }
+        console.log('Finished. Total items processed:', processedCount, '| Final sum:', sum);
+    } catch (error) {
+        console.error('An error occurred while processing the stream:', error.message);
+    }
+}
