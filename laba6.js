@@ -4,3 +4,19 @@ async function* dataStreamGenerator(totalItems) {
         yield i; 
     }
 }
+
+async function processLargeData(stream) {
+    let processedCount = 0;
+    let sum = 0;
+
+    for await (let chunk of stream) {
+        sum += chunk;
+        processedCount++;
+        
+        if (processedCount % 5 === 0) {
+            console.log('Processed items:', processedCount, '| Current sum:', sum);
+        }
+    }
+    
+    console.log('Finished. Total items processed:', processedCount, '| Final sum:', sum);
+}
